@@ -175,7 +175,7 @@ class O3DPointCloud():
             "outlier_cloud": outlier_cloud
         }
 
-def visualize_o3d_point_cloud(o3d_pcd):
+def visualize_o3d_point_cloud(o3d_pcd, offline=False):
     point_cloud = o3d_pcd.get_points()
     colors_rgb = o3d_pcd.get_colors()
 
@@ -202,7 +202,10 @@ def visualize_o3d_point_cloud(o3d_pcd):
 
     fig = go.Figure(data=[rgbd_scatter], layout=layout)
     # Show the figure
-    fig.show()
+
+    if not offline:
+        fig.show()
+    return fig
 
 def scene_pcd_fn(
         rgb_img_input,
@@ -212,10 +215,11 @@ def scene_pcd_fn(
         max_points=10000,
         is_real_robot=True,
         downsample=True,
-        depth_trunc=3.0
+        depth_trunc=3.0,
+        depth_scale=1000.0,
     ):
         rgbd_pc = O3DPointCloud(max_points=max_points)
-        rgbd_pc.create_from_rgbd(rgb_img_input, depth_img_input, intrinsic_matrix, depth_trunc=depth_trunc)
+        rgbd_pc.create_from_rgbd(rgb_img_input, depth_img_input, intrinsic_matrix, depth_trunc=depth_trunc,depth_scale=depth_scale)
         rgbd_pc.transform(extrinsic_matrix)
         if downsample:
             rgbd_pc.preprocess()

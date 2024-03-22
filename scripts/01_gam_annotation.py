@@ -91,6 +91,7 @@ def main():
     elif mode == "human_demo":
         first_frame = load_first_frame_from_human_hdf5_dataset(args.human_demo, bgr=True)
 
+    print("Original image is of shape", first_frame.shape)
     cv2.imwrite(os.path.join(os.path.join(tmp_path, "images", "frame.jpg")), first_frame)
 
     args.images = tmp_path
@@ -102,6 +103,7 @@ def main():
     print("Annotating the image with text input: ", args.text)
 
     final_mask_image = wrapper.segment(first_frame, args.text)
+    #print("Mask image is of size", final_mask_image.shape)
     os.makedirs(os.path.join(tmp_path, "masks"), exist_ok=True)
     final_mask_image.save(os.path.join(tmp_path, "masks", "frame.png"))
     overlay_image = overlay_xmem_mask_on_image(first_frame, np.array(final_mask_image), use_white_bg=True, rgb_alpha=0.3)

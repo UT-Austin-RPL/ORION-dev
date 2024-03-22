@@ -10,6 +10,8 @@ import yaml
 import random
 import numpy as np
 
+import pandas
+
 import plotly.express as px
 import plotly.graph_objects as go
 
@@ -77,9 +79,13 @@ def get_camera_intrinsics_from_annotation(annotation_path):
     camera_intrinsics = info["intrinsics"]
     return camera_intrinsics
     
-def get_depth_seq_from_human_demo(dataset_name, start_idx=0, end_idx=None):
+def get_depth_seq_from_human_demo(dataset_name, start_idx=0, end_idx=None, use_dust3r=False):
     with h5py.File(dataset_name, "r") as f:
-        depth_seq = f["data/human_demo/obs/agentview_depth"].astype(np.float32)
+        if use_dust3r:
+            depth_seq = f["data/human_demo/obs/dust3r_depth"].astype(np.float32)
+            print(depth_seq[()].shape)
+        else:
+            depth_seq = f["data/human_demo/obs/agentview_depth"].astype(np.float32)
         if end_idx is None:
             depth_seq = depth_seq[start_idx:]
         else:
@@ -106,7 +112,7 @@ def get_image_seq_from_annotation(annotation_path, start_idx=0, end_idx=None):
     dataset_name = info["original_file"]
     return get_image_seq_from_human_demo(dataset_name, start_idx=start_idx, end_idx=end_idx)
 
-def get_first_frame_annotation(annotations_folder):
+def get_first_frame_annotation(annotations_folder, use_dust3r=False):
     """A helper function to get the first frame and its annotation from the specified annotations folder.
 
     Args:
@@ -115,8 +121,19 @@ def get_first_frame_annotation(annotations_folder):
     Returns:
         image, annotated_mask
     """
-    first_frame = cv2.imread(os.path.join(annotations_folder, "frame.jpg"))[:, :, ::-1]
-    first_frame_annotation = np.array(Image.open((os.path.join(annotations_folder, "frame_annotation.png"))))
+
+    if use_dust3r:
+        info = get_annotation_info(annotations_folder)
+        dataset_name = info["original_file"]
+        print(dataset_name)
+        dataset = h5py.File(dataset_name, "r")
+        first_frame = dataset["data/human_demo/obs/dust3r_rgb"][0]
+        first_frame_annotation = dataset["data/human_demo/obs/dust3r_mask"][0]
+        dataset.close()
+    else:
+        first_frame = cv2.imread(os.path.join(annotations_folder, "frame.jpg"))[:, :, ::-1]
+        first_frame_annotation = np.array(Image.open((os.path.join(annotations_folder, "frame_annotation.png"))))
+
     # Resize first_frame to first_frame_annotation if shape does not match
     if first_frame.shape[0] != first_frame_annotation.shape[0] or first_frame.shape[1] != first_frame_annotation.shape[1]:
         first_frame = cv2.resize(first_frame, (first_frame_annotation.shape[1], first_frame_annotation.shape[0]), interpolation=cv2.INTER_AREA)
@@ -574,10 +591,12 @@ def plotly_draw_3d_pcd(pcd_points, pcd_colors=None, addition_points=None, marker
     )
     data = [rgbd_scatter]
     if addition_points is not None:
-        assert(addition_points.shape[-1] == 3)
-        # check if addition_points are three dimensional
-        if len(addition_points.shape) == 2:
-            addition_points = [addition_points]
+        # print(addition_points.shape)
+        assert(addition_points[0].shape[-1] == 3)
+        # # check if addition_points are three dimensional
+        if type(addition_points) == np.ndarray:
+            if len(addition_points.shape) == 2:
+                addition_points = [addition_points]
         for points in addition_points:
             x = points[:, 0]
             y = points[:, 1]
@@ -1082,6 +1101,8 @@ def create_point_clouds_from_keypoints(keypoints, depth_img, camera_intrinsics_m
         _type_: _description_
     """
     z = depth_img.squeeze() / 1000
+    max_x, max_y = depth_img.shape[1] - 1, depth_img.shape[0] - 1
+
     if len(depth_img.shape) == 3:
         height, width = depth_img[0].shape[:2]
     else:
@@ -1089,6 +1110,7 @@ def create_point_clouds_from_keypoints(keypoints, depth_img, camera_intrinsics_m
     x = keypoints[:, 0]
     y = keypoints[:, 1]
     new_z = z[y.astype(np.int32), x.astype(np.int32)]
+    
     fx = camera_intrinsics_matrix[0, 0]
     fy = camera_intrinsics_matrix[1, 1]
     cx = camera_intrinsics_matrix[0, 2]
@@ -1100,6 +1122,7 @@ def create_point_clouds_from_keypoints(keypoints, depth_img, camera_intrinsics_m
 
     points = np.ascontiguousarray(np.stack([X, Y, Z], axis=-1))
     points = points.reshape(-1, 3)
+
     return points
 
 

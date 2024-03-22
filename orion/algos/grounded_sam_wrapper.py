@@ -13,6 +13,7 @@ import copy
 import numpy as np
 import torch
 from PIL import Image, ImageDraw, ImageFont
+import torchvision
 from torchvision.ops import box_convert
 
 # Grounding DINO

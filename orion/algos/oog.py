@@ -977,7 +977,8 @@ class OpenWorldObjectSceneGraph():
                       additional_point_draw_lines=False,
                       use_white_bg=False,
                       skip_trajs=[],
-                      skip_keypoints=[]
+                      skip_keypoints=[],
+                      offline=False
 ):
         assert(self.camera_extrinsics is not None), "Camera extrinsics not set"
         assert(self.camera_intrinsics is not None), "Camera intrinsics not set"
@@ -1014,9 +1015,12 @@ class OpenWorldObjectSceneGraph():
                 # skip some points using np delete
                 additional_points = np.delete(additional_points, skip_keypoints, axis=0)
             marker_size = 8
-
-        plotly_draw_3d_pcd(pcd_points, pcd_colors, addition_points=additional_points, marker_size=marker_size, no_background=no_background, additional_point_draw_lines=additional_point_draw_lines)
-        return pcd_points, pcd_colors
+        if offline:
+            fig = plotly_draw_3d_pcd(pcd_points, pcd_colors, addition_points=additional_points, marker_size=marker_size, no_background=no_background, additional_point_draw_lines=additional_point_draw_lines, offline=offline)
+            return fig
+        else:
+            plotly_draw_3d_pcd(pcd_points, pcd_colors, addition_points=additional_points, marker_size=marker_size, no_background=no_background, additional_point_draw_lines=additional_point_draw_lines)
+            return pcd_points, pcd_colors
 
     def get_objects_3d_points(self, object_id=None, filter=True, remove_outlier_kwargs={"nb_neighbors": 40, "std_ratio": 0.7}, downsample=True):
         assert(self.camera_extrinsics is not None), "Camera extrinsics not set"

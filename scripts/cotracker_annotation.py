@@ -50,6 +50,11 @@ def main():
         action="store_true",
     )
 
+    parser.add_argument(
+        "--use-dust3r",
+        action="store_true",
+    )
+
     args = parser.parse_args()
 
     if args.checkpoint is not None:
@@ -85,11 +90,15 @@ def main():
     
     annotation_info = get_annotation_info(args.annotation_path)
     assert(annotation_info["mode"] in ["video", "demo", "human_demo"]), "target file must be a video"
-    video_path = annotation_info["video_file"]
+    if args.use_dust3r:
+        video_path = annotation_info["video_file_dust3r"]
+    else:
+        video_path = annotation_info["video_file"]
     print(annotation_info)
 
 
     video_frames = read_video_from_path(video_path)
+    print(type(video_frames))
     print(video_frames.shape)
 
     if annotation_info["mode"] != "human_demo":
@@ -132,7 +141,7 @@ def main():
         # save a video with predicted tracks
         seq_name = "cotracker"
         video = torch.tensor(np.stack(window_frames), device=DEFAULT_DEVICE).permute(0, 3, 1, 2)[None]
-        vis = Visualizer(save_dir=f"./{args.annotation_path}/{seq_name}", 
+        vis = Visualizer(save_dir=f"{args.annotation_path}/{seq_name}", 
                         pad_value=120, 
                         linewidth=3,
                         tracks_leave_trace=30)
@@ -140,7 +149,7 @@ def main():
                     pred_tracks, 
                     pred_visibility, 
                     query_frame=args.grid_query_frame)
-
+        print("done")
 
     # pred_tracks: [B, T, N, 2]
     # pred_visibility: [B, T, N]
