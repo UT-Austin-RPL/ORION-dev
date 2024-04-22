@@ -6,13 +6,17 @@ from PIL import Image
 import cv2
 from tqdm import tqdm
 
+import init_path
 from orion.utils.misc_utils import VideoWriter, get_first_frame_annotation, read_from_runtime_file, finish_experiments, add_palette_on_mask, overlay_xmem_mask_on_image, get_palette
 from orion.algos.xmem_tracker import XMemTracker
+from orion.algos.cutie_tracker import CutieTracker
 
 class RolloutTracker:
     def __init__(self):
         self.device = "cuda:0"
-        self.xmem_tracker = XMemTracker(xmem_checkpoint='third_party/xmem_checkpoints/XMem.pth', device=self.device)
+        # self.xmem_tracker = XMemTracker(xmem_checkpoint='third_party/xmem_checkpoints/XMem.pth', device=self.device)
+        self.xmem_tracker = CutieTracker(device=self.device)
+
 
     def run(self):
         runtime_folder, rollout_folder, human_video_annotation_path = read_from_runtime_file()
@@ -30,7 +34,7 @@ class RolloutTracker:
         while success:
             record_images.append(image)
             success, image = videocap.read()
-
+        videocap.release()
         assert len(record_images) > 0, "No images were recorded from the video."
         record_images = record_images[::10]
         tmp_annotation_path = os.path.join(runtime_folder, "tmp_annotation.png")
@@ -56,10 +60,10 @@ class RolloutTracker:
                 video_writer.append_image(overlay_img)
 
         # copy this file to "annotation_{count}.mp4"
-        shutil.copyfile(os.path.join(runtime_folder, "annotation_video.mp4"), os.path.join(runtime_folder, f"annotation_video_{count}.mp4"))
         count = 0
         while os.path.exists(os.path.join(runtime_folder, f"rollout_{count}.mp4")):
             count += 1
+        shutil.copyfile(os.path.join(runtime_folder, "annotation_video.mp4"), os.path.join(runtime_folder, f"annotation_video_{count}.mp4"))
         os.rename(rollout_video_name, os.path.join(runtime_folder, f"rollout_{count}.mp4"))
 
 # Usage example:
