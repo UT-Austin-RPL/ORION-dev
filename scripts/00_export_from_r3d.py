@@ -198,14 +198,13 @@ def main():
         data_config["extrinsics"] = {"camera_rs_0": {"translation": [0, 0, 0], "rotation": np.eye(3).tolist()}}
         grp.attrs["data_config"] = json.dumps(data_config)
 
+    print("Dataset saved in ", os.path.join(folder, f'{filename}_demo.hdf5'))
+
     # visualize the image sequence
     for i in range(len(color_seq)):
         cv2.imshow('color', color_seq[i])
         cv2.waitKey(10)
     cv2.destroyAllWindows()
-
-
-    print("Dataset saved in ", os.path.join(folder, f'{filename}_demo.hdf5'))
 
         
 if __name__ == "__main__":

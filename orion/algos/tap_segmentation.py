@@ -87,6 +87,7 @@ class TAPSegmentation:
         for i in range(len(result) - 1):
             self.temporal_segments.add_segment(result[i], result[i + 1])
         
+
     def generate_segment_videos(self, annotation_path):
         # Load data from annotation path
         video_seq = get_video_seq_from_annotation(annotation_path)
@@ -97,17 +98,23 @@ class TAPSegmentation:
         video_writer = VideoWriter(annotation_path, video_name=f"tap_segmentation.mp4", fps=30)
         for i in range(len(video_seq)):
             image_frame = []
-            for segment in self.temporal_segments.segments:
+            for j, segment in enumerate(self.temporal_segments.segments):
+                if j % 4 == 0:
+                    image_frame_row = []
                 if segment.in_duration(i):
-                    image_frame.append(video_seq[i])
+                    image_frame_row.append(video_seq[i])
                 elif i >= segment.end_idx:
-                    image_frame.append(video_seq[segment.end_idx])
+                    image_frame_row.append(video_seq[segment.end_idx])
                 else:
-                    image_frame.append(video_seq[segment.start_idx])
-            image_frame = np.concatenate(image_frame, axis=1)
+                    image_frame_row.append(video_seq[segment.start_idx])
+                if j % 4 == 3 or j == len(self.temporal_segments.segments) - 1:
+                    for _ in range(4 - len(image_frame_row)):
+                        image_frame_row.append(np.zeros_like(video_seq[0]))
+                    image_frame_row = np.concatenate(image_frame_row, axis=1)
+                    image_frame.append(image_frame_row)
+            image_frame = np.concatenate(image_frame, axis=0)
             video_writer.append_image(image_frame)
         video_writer.save(bgr=False)
-
         # self.save_segments(os.path.join(annotation_path, "temporal_segments.pt"))
         # self.save_clustering(os.path.join(annotation_path, "clustering.pt"))
 
