@@ -1087,6 +1087,8 @@ def create_point_clouds_from_keypoints(keypoints, depth_img, camera_intrinsics_m
         height, width = depth_img.shape[:2]
     x = keypoints[:, 0]
     y = keypoints[:, 1]
+    x = np.clip(x, 0, width-1)
+    y = np.clip(y, 0, width-1)
     new_z = z[y.astype(np.int32), x.astype(np.int32)]
     fx = camera_intrinsics_matrix[0, 0]
     fy = camera_intrinsics_matrix[1, 1]

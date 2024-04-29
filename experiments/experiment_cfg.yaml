@@ -3,7 +3,21 @@ task_mapping:
    "🚤 Simple assembly of a boat": "task2"
    "🍟 Put a chip bag on a plate": "task3"
    "🍵📦 Mug on a coaster, box on a plate": "task4"
-   "🚤🚤 22 Complex assembly of a boat": "task5"   
+   "🚤🚤 22 Complex assembly of a boat": "task5"
+   "Pour over Coffee": "task6"
+   "Put dripper on cup": "task7"
+
+   "(Kitchen) mug on a coaster": "task11"
+   "(Office) mug on a coaster": "task12"
+   "(Outdoor) mug on a coaster": "task13"
+
+   "(Eval Office) mug on a coaster": "task14"
+   "(Eval Office Variation) mug on a coaster": "task15"
+   "(Eval AHG) mug on a coaster": "task16"
+
+   
+   
+   
 
 demo_mapping:
   "task1": "iphone_pick_place_blue_mug_1_demo"
@@ -11,6 +25,17 @@ demo_mapping:
   "task3": "iphone_place_chip_bag_on_plate_1_demo"
   "task4": "long_horizon_rearrangement_cheese_4_demo"
   "task5": "iphone_long_horizon_boat_18_demo"
+  "task6": "pour_over_coffee_13_demo"
+  "task7": "put_dripper_on_cup_demo"
+
+
+  "task11": "iphone_pick_place_blue_mug_1_demo"
+  "task12": "place_mug_on_coaster_gdc_room_demo"
+  "task13": "place_mug_on_coaster_wild_1_demo"
+
+  "task14": "iphone_pick_place_blue_mug_1_demo"
+  "task15": "iphone_pick_place_blue_mug_1_demo"
+  "task16": "iphone_pick_place_blue_mug_1_demo"  
 
 
 task_id_mapping:
@@ -19,13 +44,24 @@ task_id_mapping:
     "task3": "chip_bag_on_plate"
     "task4": "mug_coaster_box_plate"
     "task5": "complex_boat_assembly_2"
+    "task6": "pour_over_coffee"
+    "task7": "put_dripper_on_cup"
 
+    "task11": "put_mug_on_coaster"
+    "task12": "put_mug_on_coaster_office"
+    "task13": "put_mug_on_coaster_outdoor"
+    "task14": "put_mug_on_coaster_office"
+    "task15": "put_mug_on_coaster_office_variation"
+    "task16": "put_mug_on_coaster_ahg"
+
+    
 model_mapping:
     "ORION (Ours)": "orion"
     "Hand tracking": "hand"
     "AVDC (Optical Flow)": "dense_correspondence"
     "Baseline (Naive Following)": "baseline_1"
     "Video (Orion)": "orion_video"
+    "Repetitive Eval": "repetitive_eval"
 
 
 result_mapping:

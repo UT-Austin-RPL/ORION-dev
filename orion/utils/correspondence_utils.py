@@ -175,7 +175,7 @@ class CorrespondenceModel(nn.Module):
                 hungarian_matrix[mask_id-1, matched_id-1] += 1
             hungarian_matrix[mask_id-1, :] /= np.sum(hungarian_matrix[mask_id-1, :])
 
-            new_mask_resized_as_ref_seg = resize_image_to_same_shape(current_masks[mask_id], ref_image)
+            new_mask_resized_as_ref_seg = resize_image_to_same_shape(current_masks[mask_id - 1], ref_image)
             new_current_annotation_mask[np.where(new_mask_resized_as_ref_seg == 255)] = mask_id
         # new_current_annotation_mask = resize_image_to_same_shape(new_current_annotation_mask, current_obs_image_input)
         return new_current_annotation_mask, hungarian_matrix
