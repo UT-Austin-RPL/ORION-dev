@@ -427,7 +427,7 @@ class HumanVideoOOGs():
             seq.append(graph.get_reference_object_id())
         return seq
     
-    def plan_inference(self, velocity_threshold=1., target_dist_threshold=0.01, target_intersection_threshold=1000):
+    def plan_inference(self, velocity_threshold=1., velocity_std_threshold=1., target_dist_threshold=0.01, target_intersection_threshold=1000):
         """This is a function to infer the important information in a plan. Specifically, we will get the following information from this function: 
             1. OOG mode sequence, which specifies the interaction mode (freespace, move with gripper closed, move with gripper open)
             2. Manipulate object sequence, which specifies the object that the robot should manipulate in each step
@@ -442,7 +442,7 @@ class HumanVideoOOGs():
         """
         for graph_id in range(self.num_graphs):
             graph_in_query = self.get_graph(graph_id)
-            ORION_LOGGER.debug(f"Current graph: {graph_id}")
+            ORION_LOGGER.info(f"Current graph: {graph_id}")
             num_objects = graph_in_query.num_objects
 
             # graph_in_query.draw_scene_3d(draw_trajs=True)
@@ -508,6 +508,7 @@ class HumanVideoOOGs():
                     intersections = [d for d in dists if d < dist_threshold]
                     # print(i+1, ", ", j+1, " | ", len(intersections))
                     if len(intersections) > intersection_threshold:
+                        ORION_LOGGER.info(f"Object {i+1}, Object {j+1} | # of intersections: {len(intersections)}")
                         contact_states.append((i+1, j+1))
                         objects_in_contact.append(i+1)
                         objects_in_contact.append(j+1)
@@ -517,13 +518,15 @@ class HumanVideoOOGs():
                 prev_graph = self.get_graph(graph_id - 1)
                 if len(prev_graph.contact_states) > 0:
                     for contact_state in prev_graph.contact_states:
-                        if contact_state[0] not in objects_in_contact and contact_state[1] not in objects_in_contact:
+                        if contact_state[0] not in objects_in_contact and contact_state[1] not in objects_in_contact and contact_state[0] != prev_graph.manipulate_object_id and contact_state[1] != prev_graph.manipulate_object_id:
+                            ORION_LOGGER.info(f"Adding back the previous contact state, {contact_state}")
+                            ORION_LOGGER.info(f"Previous graph manipulate the object: {prev_graph.manipulate_object_id}")
                             contact_states.append(contact_state)
 
             
             graph_in_query.contact_states = contact_states
 
-            ORION_LOGGER.debug(f"contact_states: {graph_in_query.contact_states}")
+            ORION_LOGGER.info(f"contact_states: {graph_in_query.contact_states}")
             if graph_in_query.get_manipulate_object_id() > 0:
                 manipulate_object_id = graph_in_query.get_manipulate_object_id()
                 if len(contact_states) > 0:

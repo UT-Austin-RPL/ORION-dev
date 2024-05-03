@@ -570,7 +570,7 @@ class OpenWorldObjectSceneGraph():
         return {
             "human_demo_dataset_name": human_demo_dataset_name,
         }
-   
+
     def get_thumb_index_trajectories(self):
         hamer_result, _ = get_hamer_result(self.human_video_annotation_path)
 
@@ -614,9 +614,6 @@ class OpenWorldObjectSceneGraph():
         index_tip_trajs = np.array(index_tip_trajs)
         index_dip_trajs = np.array(index_dip_trajs)
         return thumb_tip_trajs, thumb_dip_trajs, index_tip_trajs, index_dip_trajs
-
-
-    
 
     def generate_from_robot_demo(self,
                                  input_image,
@@ -1139,13 +1136,13 @@ class OpenWorldObjectSceneGraph():
         raise NotImplementedError
 
     def set_pixel_trajs(self, pixel_trajs):
-        assert(pixel_trajs.shape[0] == len(self.point_nodes)), "Number of points must be the same"
+        assert(pixel_trajs.shape[0] == len(self.point_nodes)), ORION_LOGGER.error(f"Number of points must be the same, expecting {len(self.point_nodes)} got {pixel_trajs.shape[0]}")
         for i, point_node in enumerate(self.point_nodes):
             point_node.tracked_pixel_traj = pixel_trajs[i]
 
     def create_world_points(self):
-        assert(self.camera_extrinsics is not None), "Camera extrinsics not set"
-        assert(self.camera_intrinsics is not None), "Camera intrinsics not set"
+        assert(self.camera_extrinsics is not None), ORION_LOGGER.error("Camera extrinsics not set")
+        assert(self.camera_intrinsics is not None), ORION_LOGGER.error("Camera intrinsics not set")
         points = create_point_clouds_from_keypoints(
             np.array(self.get_point_list(mode="pixel")),
             self.input_depth[..., np.newaxis],

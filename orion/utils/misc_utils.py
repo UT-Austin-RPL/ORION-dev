@@ -103,6 +103,14 @@ def get_depth_seq_from_annotation(annotation_path, start_idx=0, end_idx=None):
     dataset_name = info["original_file"]
     return get_depth_seq_from_human_demo(dataset_name, start_idx=start_idx, end_idx=end_idx)
 
+def get_mask_seq_from_human_demo(annotation_path, start_idx=0, end_idx=None):
+    mask_file = os.path.join(annotation_path, "masks.npz")
+    masks = np.load(mask_file)["arr_0"]
+    if end_idx is None:
+        masks = masks[start_idx:]
+    else:
+        masks = masks[start_idx:end_idx]
+    return masks
 
 def get_image_seq_from_annotation(annotation_path, start_idx=0, end_idx=None):
     info = get_annotation_info(annotation_path)
@@ -1011,7 +1019,8 @@ def sample_points_in_mask(original_segmentation_mask, num_points, object_id=None
     y_indices, x_indices = np.nonzero(segmentation_mask)
     # Check if there are enough unique points in the mask to sample
     if len(y_indices) < num_points:
-        raise ValueError(f"Not enough unique points in the mask to sample the requested number of points. Specified to sample {num_points} points, but only found {len(y_indices)} unique points in the mask.")
+        return None
+        # raise ValueError(f"Not enough unique points in the mask to sample the requested number of points. Specified to sample {num_points} points, but only found {len(y_indices)} unique points in the mask.")
 
     # Randomly sample indices
     sampled_indices = random.sample(range(len(y_indices)), num_points)
@@ -1087,6 +1096,9 @@ def create_point_clouds_from_keypoints(keypoints, depth_img, camera_intrinsics_m
         height, width = depth_img.shape[:2]
     x = keypoints[:, 0]
     y = keypoints[:, 1]
+    # clip keypoints in case they are out of image frames
+    x = np.clip(x, 0, width - 1)
+    y = np.clip(y, 0, height - 1)
     new_z = z[y.astype(np.int32), x.astype(np.int32)]
     fx = camera_intrinsics_matrix[0, 0]
     fy = camera_intrinsics_matrix[1, 1]

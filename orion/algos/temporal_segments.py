@@ -74,6 +74,14 @@ class TemporalSegments():
     def __repr__(self) -> str:
         repr_str = f"TemporalSegments(name={self.name}, num_segments={self.num_segments}, seq_len={self.seq_len})"
         return repr_str
+
+    def print_details(self):
+        print(f"TemporalSegments: {self.name}")
+        print(f"Number of segments: {self.num_segments}")
+        print(f"Sequence length: {self.seq_len}")
+        print("Segments:")
+        for i, segment in enumerate(self.segments):
+            print(f"Segment {i}: {segment}")
         
     def save_to_file(self, file_path):
         torch.save(self.to_torch_tensor(), file_path)
