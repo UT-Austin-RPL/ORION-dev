@@ -572,17 +572,21 @@ def plotly_draw_image_correspondences(image1, points1, image2, points2, max_widt
     else:
         return fig
 
-def plotly_draw_3d_pcd(pcd_points, pcd_colors=None, addition_points=None, marker_size=3, equal_axis=True, title="", offline=False, no_background=False, default_rgb_str="(255,0,0)",additional_point_draw_lines=False, uniform_color=False):
+def plotly_draw_3d_pcd(pcd_points=None, pcd_colors=None, addition_points=None, marker_size=3, equal_axis=True, title="", offline=False, no_background=False, default_rgb_str="(255,0,0)",additional_point_draw_lines=False, uniform_color=False):
 
-    if pcd_colors is None:
-        color_str = [f'rgb{default_rgb_str}' for _ in range(pcd_points.shape[0])]
-    else:
-        color_str = ['rgb('+str(r)+','+str(g)+','+str(b)+')' for r,g,b in pcd_colors]
+    x_vals, y_vals, z_vals = [], [], []
+    color_str = 'rgb(255,0,0)'
 
-    # Extract x, y, and z columns from the point cloud
-    x_vals = pcd_points[:, 0]
-    y_vals = pcd_points[:, 1]
-    z_vals = pcd_points[:, 2]
+    if pcd_points is not None:
+        # Extract x, y, and z columns from the point cloud
+        x_vals = pcd_points[:, 0]
+        y_vals = pcd_points[:, 1]
+        z_vals = pcd_points[:, 2]
+
+        if pcd_colors is None:
+            color_str = [f'rgb{default_rgb_str}' for _ in range(pcd_points.shape[0])]
+        else:
+            color_str = ['rgb('+str(r)+','+str(g)+','+str(b)+')' for r,g,b in pcd_colors]
 
     # Create the scatter3d plot
     rgbd_scatter = go.Scatter3d(
@@ -1237,3 +1241,35 @@ def finish_experiments(runtime_folder, rollout_folder, human_video_annotation_fo
                      "rollout_folder": rollout_folder,
                    }, f)
     ORION_LOGGER.info(f"Writing {runtime_folder}/info.json")
+
+def create_video(frames, output_path, fps=30, greyscale=False):
+    height, width = frames[0].shape[0:2]
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # You can also use 'XVID', 'MJPG', etc.
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    
+    if not greyscale:
+        frames = frames[:,:,:,::-1]
+
+
+    for frame in frames:
+        if greyscale:
+            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
+        out.write(frame)
+
+    out.release()
+
+def create_video(frames, output_path, fps=30, greyscale=False):
+    height, width = frames[0].shape[0:2]
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # You can also use 'XVID', 'MJPG', etc.
+    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+    
+    if not greyscale:
+        frames = frames[:,:,:,::-1]
+
+
+    for frame in frames:
+        if greyscale:
+            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
+        out.write(frame)
+
+    out.release()

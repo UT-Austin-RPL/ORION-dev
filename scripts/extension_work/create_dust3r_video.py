@@ -84,6 +84,13 @@ def main():
         for i in range(original_rgb.shape[0]):
             dust3r_rgb[i] = np.array(dust3r_resize(Image.fromarray(original_rgb[i]), 512))
         print(original_rgb.shape, dust3r_rgb.shape)
+
+        if "dust3r_rgb" in demo_file["data/human_demo/obs/"]:
+            del demo_file["data/human_demo/obs/dust3r_rgb"]
+        demo_file.create_dataset("data/human_demo/obs/dust3r_rgb", data=dust3r_rgb)
+
+        if not os.path.exists(os.path.join(annotation_dir, "dust3r")):
+            os.mkdir(os.path.join(annotation_dir, "dust3r"))
         create_video(dust3r_rgb, os.path.join(annotation_dir, args.video_name))
 
         config_dict["video_file_dust3r"] = os.path.join(annotation_dir, args.video_name)

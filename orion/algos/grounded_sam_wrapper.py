@@ -47,7 +47,7 @@ import groundingdino.datasets.transforms as T
 from orion.utils.misc_utils import get_palette
 
 class GroundedSamWrapper:
-    def load_model_hf(self, repo_id, filename, ckpt_config_filename, device='cuda'):
+    def load_model_hf(self, repo_id, filename, ckpt_config_filename, device='cuda:4'):
         cache_config_file = hf_hub_download(repo_id=repo_id, filename=ckpt_config_filename)
 
         args = SLConfig.fromfile(cache_config_file) 
@@ -55,7 +55,7 @@ class GroundedSamWrapper:
         args.device = device
 
         cache_file = hf_hub_download(repo_id=repo_id, filename=filename)
-        checkpoint = torch.load(cache_file, map_location='cuda')
+        checkpoint = torch.load(cache_file, map_location=device)
         log = model.load_state_dict(clean_state_dict(checkpoint['model']), strict=False)
         print("Model loaded from {} \n => {}".format(cache_file, log))
         _ = model.eval()
@@ -69,10 +69,10 @@ class GroundedSamWrapper:
 
         self.groundingdino_model = self.load_model_hf(ckpt_repo_id, ckpt_filenmae, ckpt_config_filename)
 
-        device = 'cuda'
+        self.device = 'cuda:4'
         sam_checkpoint = './third_party/sam_checkpoints/sam_vit_h_4b8939.pth'
         sam = build_sam(checkpoint=sam_checkpoint)
-        sam.to(device=device)
+        sam.to(device=self.device)
         self.sam_predictor = SamPredictor(sam)
 
         from diffusers import StableDiffusionInpaintPipeline
@@ -82,7 +82,7 @@ class GroundedSamWrapper:
             torch_dtype=torch.float16,
         )
 
-        pipe = pipe.to("cuda")
+        pipe = pipe.to(self.device)
 
         import io
 
@@ -122,7 +122,8 @@ class GroundedSamWrapper:
             image=image, 
             caption=prompt_text, 
             box_threshold=box_threshold, 
-            text_threshold=text_threshold
+            text_threshold=text_threshold,
+            device='cpu'
         )
 
         if boxes.shape[0] == 0:
@@ -145,8 +146,7 @@ class GroundedSamWrapper:
         H, W, _ = image_source.shape
         boxes_xyxy = box_ops.box_cxcywh_to_xyxy(boxes) * torch.Tensor([W, H, W, H])
 
-        device = "cuda"
-        transformed_boxes = self.sam_predictor.transform.apply_boxes_torch(boxes_xyxy, image_source.shape[:2]).to(device)
+        transformed_boxes = self.sam_predictor.transform.apply_boxes_torch(boxes_xyxy, image_source.shape[:2]).to(self.device)
         masks, _, _ = self.sam_predictor.predict_torch(
                     point_coords = None,
                     point_labels = None,

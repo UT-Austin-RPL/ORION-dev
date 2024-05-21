@@ -28,7 +28,10 @@ def main():
         img.save(os.path.join(output_folder, f"image{i}.png"))
     print("saved in ", output_folder)
 
-
+    with open(os.path.join(annotations_folder, "config.json"), "w") as f:
+        config_dict['images_folder'] = output_folder
+        json.dump(config_dict, f)
+    demo_file.close()
 
 if __name__ == "__main__":
     main()

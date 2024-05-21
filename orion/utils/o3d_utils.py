@@ -169,7 +169,7 @@ class O3DPointCloud():
             "outlier_cloud": outlier_cloud
         }
 
-def visualize_o3d_point_cloud(o3d_pcd, offline=False):
+def visualize_o3d_point_cloud(o3d_pcd, offline=False, marker_size=3):
     point_cloud = o3d_pcd.get_points()
     colors_rgb = o3d_pcd.get_colors()
 
@@ -186,7 +186,7 @@ def visualize_o3d_point_cloud(o3d_pcd, offline=False):
         y=y_vals,
         z=z_vals,
         mode='markers',
-        marker=dict(size=3, color=color_str, opacity=0.8)
+        marker=dict(size=marker_size, color=color_str, opacity=0.8)
     )
 
     # Set the layout for the plot
@@ -279,7 +279,9 @@ def global_registration(pcd_1_points,
     source_down = source_pcd.voxel_down_sample(voxel_size)
     target_down = target_pcd.voxel_down_sample(voxel_size)
     normal_radius = 0.1
+    #normal_radius = voxel_size * 2
     fpfh_radius = 0.25
+    #fpfh_radius = voxel_size * 5
     fpfh_nn = 100
     # normal_radius = 0.01 # 0.1
     # fpfh_radius = 0.01 # 0.25

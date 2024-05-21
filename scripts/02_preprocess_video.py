@@ -9,10 +9,10 @@ def main():
     parser.add_argument("--save-video", action="store_true")
     parser.add_argument('--tap-pen', type=float, default=10, help='Penalty for changepoint detection.')
     parser.add_argument("--use-dust3r", action="store_true")
-    parser.add_argument("--create-resized-for-dust3r", action="store_true")
+    parser.add_argument("--create-dust3r-resized", action="store_true")
     args = parser.parse_args()
 
-    if args.create_resized_for_dust3r:
+    if args.create_dust3r_resized:
         print("*************Creating Resized Images for Dust3r*************")
         commands = [
             "python",
@@ -34,7 +34,7 @@ def main():
     command = " ".join(commands)
     os.system(command)
 
-    if args.create_resized_for_dust3r:
+    if args.create_dust3r_resized:
         print("*************Creating Resized Masks for Dust3r*************")
         commands = [
             "python",

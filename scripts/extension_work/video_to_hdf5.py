@@ -9,10 +9,14 @@ import cv2
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--video-path', required=True)
-    parser.add_argument('--output-name', required=True)
+    parser.add_argument('--output-name', required=False, default=None)
     args = parser.parse_args()
     video_path = args.video_path
-    output_name = args.output_name
+
+    if args.output_name is None:
+        output_name = os.path.basename(video_path).split(".")[0]
+    else:
+        output_name = args.output_name
 
     demo_file = h5py.File(os.path.join(os.path.dirname(video_path), output_name + ".hdf5"), "w")
     #convert video into numpy array of frames
@@ -29,6 +33,7 @@ def main():
     frames = np.array(frames)
     #create dataset for frames
     demo_file.create_dataset("data/human_demo/obs/agentview_rgb", data=frames)
+    demo_file.close()
 
 if __name__ == "__main__":
     main()

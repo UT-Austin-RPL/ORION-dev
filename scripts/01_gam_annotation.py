@@ -14,6 +14,7 @@ import argparse
 import shutil
 import torch
 
+from PIL import Image
 import matplotlib.pyplot as plt
 from easydict import EasyDict
 import init_path
@@ -39,6 +40,9 @@ def parse_args():
     parser.add_argument("--rollout", help="Path to a rollout file")
     parser.add_argument("--human_demo", default="datasets/iphones/long_horizon_boat/iphone_long_horizon_boat_18_demo.hdf5", help="Path to a human demo file")
     parser.add_argument("--text", nargs="+", help="List of text")
+    parser.add_argument("--bgr", default=True, action='store_true', help="Use BGR color space")
+    parser.add_argument('--no-bgr', dest='bgr', action='store_false')
+
     return parser.parse_args()
 
 def main():
@@ -87,12 +91,12 @@ def main():
     elif mode == "video":
         _, first_frame = cv2.VideoCapture(args.video).read()
     elif mode == "demo":
-        first_frame = load_first_frame_from_hdf5_dataset(args.demo, demo_idx=args.demo_idx, bgr=True)
+        first_frame = load_first_frame_from_hdf5_dataset(args.demo, demo_idx=args.demo_idx, bgr=args.bgr)
     elif mode == "human_demo":
-        first_frame = load_first_frame_from_human_hdf5_dataset(args.human_demo, bgr=True)
+        first_frame = load_first_frame_from_human_hdf5_dataset(args.human_demo, bgr=args.bgr)
 
     print("Original image is of shape", first_frame.shape)
-    cv2.imwrite(os.path.join(os.path.join(tmp_path, "images", "frame.jpg")), first_frame)
+    Image.fromarray(first_frame).save(os.path.join(os.path.join(tmp_path, "images", "frame.jpg")))
 
     args.images = tmp_path
     args.workspace = tmp_path
@@ -134,7 +138,7 @@ def main():
                             demo_idx=args.demo_idx,
                             video_path=annotation_path,
                             video_name=args.demo.split("/")[-1].split(".")[0],
-                            bgr=True)
+                            bgr=args.bgr)
             config_dict["video_file"] = video_path
         elif mode == "human_demo":
             config_dict["original_file"] = args.human_demo
@@ -142,7 +146,7 @@ def main():
                             dataset_name=args.human_demo, 
                             video_path=annotation_path,
                             video_name=args.human_demo.split("/")[-1].split(".")[0],
-                            bgr=True)
+                            bgr=args.bgr)
             config_dict["video_file"] = video_path
         config_dict["text"] = args.text
         json.dump(config_dict, f)

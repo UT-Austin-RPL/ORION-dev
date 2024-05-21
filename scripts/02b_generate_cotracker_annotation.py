@@ -10,7 +10,7 @@ from PIL import Image
 import init_path
 from orion.utils.misc_utils import get_first_frame_annotation, overlay_xmem_mask_on_image, resize_image_to_same_shape, plotly_draw_seg_image, sample_points_in_mask,get_annotation_info, get_depth_seq_from_human_demo
 from orion.utils.o3d_utils import O3DPointCloud, load_reconstruction_info_from_human_demo, project3Dto2D, filter_pcd
-
+import h5py
 
 def sample_points_in_mask_wo_outlier(input_depth,
                                      input_annotation,
@@ -33,7 +33,8 @@ def annotate_video(annotation_folder, num_track_points, save_video=True, use_dus
 
         first_depth = get_depth_seq_from_human_demo(dataset_file_path, use_dust3r=use_dust3r)[0]
         if use_dust3r:
-            intrinsics = np.load(os.path.join(annotation_folder, "dust3r/intrinsics.npy"))[0]
+            demo_file = h5py.File(dataset_file_path, "r")
+            intrinsics = demo_file["data/human_demo/obs/dust3r_intrinsics"][()][0]
         else:
             intrinsics = load_reconstruction_info_from_human_demo(dataset_file_path)["intrinsics"]
         

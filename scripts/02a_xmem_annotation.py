@@ -21,8 +21,8 @@ def xmem_annotation(annotation_folder):
     frames = get_video_seq_from_annotation(annotation_folder)
 
     first_frame, first_frame_annotation = get_first_frame_annotation(annotation_folder)
-
-    device = "cuda:0"
+    
+    device = "cuda:4"
     xmem_tracker = XMemTracker(xmem_checkpoint=f'third_party/xmem_checkpoints/XMem.pth', device=device)
     xmem_tracker.clear_memory()
 

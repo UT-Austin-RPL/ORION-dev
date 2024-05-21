@@ -72,7 +72,7 @@ def main():
     model, model_cfg = load_hamer(args.checkpoint)
 
     # Setup HaMeR model
-    device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+    device = torch.device('cuda:2') if torch.cuda.is_available() else torch.device('cpu')
     model = model.to(device)
     model.eval()
 
