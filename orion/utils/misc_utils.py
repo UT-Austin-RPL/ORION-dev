@@ -10,22 +10,21 @@ import yaml
 import random
 import numpy as np
 
-import pandas
-
 import plotly.express as px
 import plotly.graph_objects as go
 
 import robosuite.utils.transform_utils as T
-import traceback
 import time
 import torch
 import inspect
-import signal
 
 from PIL import Image
-from scipy.ndimage import binary_erosion
 from third_party.XMem.util.palette import davis_palette
 from orion.utils.log_utils import get_orion_logger
+
+import skvideo.io
+from scipy.ndimage import zoom
+from scipy.stats import zscore
 
 ORION_LOGGER = get_orion_logger("orion")
 
@@ -68,32 +67,66 @@ def get_hamer_result(annotation_path):
 
 def get_video_seq_from_annotation(annotation_path, bgr=False):
     config_dict = get_annotation_info(annotation_path)
-    assert(config_dict["mode"] == "human_demo"), f"Annotation folder {annotation_path} is not a human demo."
+    #assert(config_dict["mode"] == "human_demo"), f"Annotation folder {annotation_path} is not a human demo."
     demo_file_path = config_dict["original_file"]
-    with h5py.File(demo_file_path, "r") as f:
-        video_seq = f["data/human_demo/obs/agentview_rgb"][()]
-    if bgr:
-        video_seq = video_seq[:, :, :, ::-1]
-
+    if config_dict["mode"] == "human_demo":
+        
+        with h5py.File(demo_file_path, "r") as f:
+            video_seq = f["data/human_demo/obs/agentview_rgb"][()]
+        if bgr:
+            video_seq = video_seq[:, :, :, ::-1]
+    elif config_dict['mode'] == 'video':
+        video_seq = skvideo.io.vread(demo_file_path)
+        if bgr:
+            video_seq = video_seq[:, :, :, ::-1]
+    else:
+        raise ValueError(f"Unknown mode {config_dict['mode']}")
     return video_seq
 
 def get_camera_intrinsics_from_annotation(annotation_path):
     info = get_annotation_info(annotation_path)
     camera_intrinsics = info["intrinsics"]
     return camera_intrinsics
-    
-def get_depth_seq_from_human_demo(dataset_name, start_idx=0, end_idx=None, use_dust3r=False):
+
+
+def get_depth_seq_from_human_demo(
+    dataset_name,
+    start_idx=0,
+    end_idx=None,
+    use_dust3r=False,
+    use_unidepth=False,
+    use_align3r=False,
+    annotation_folder=None,
+):
+    uses_multiple = (use_dust3r + use_unidepth + use_align3r) >= 2
+    assert not uses_multiple, "Cannot use multiple depth sources at the same time"
+    if use_align3r:
+        assert annotation_folder is not None
+
     with h5py.File(dataset_name, "r") as f:
-        if use_dust3r:
+        if use_align3r:
+            depth_seq = np.load(
+                os.path.join(
+                    annotation_folder,
+                    "align3r",
+                    os.path.basename(annotation_folder),
+                    "all_depth_maps.npy",
+                )
+            )
+        elif use_dust3r:
             depth_seq = f["data/human_demo/obs/dust3r_depth"].astype(np.float32)
             print(depth_seq[()].shape)
+        elif use_unidepth:
+            depth_seq = f["data/human_demo/obs/unidepth_depths"].astype(np.float32)
         else:
             depth_seq = f["data/human_demo/obs/agentview_depth"].astype(np.float32)
+
         if end_idx is None:
             depth_seq = depth_seq[start_idx:]
         else:
             depth_seq = depth_seq[start_idx:end_idx]
     return depth_seq
+
 
 def get_image_seq_from_human_demo(dataset_name, start_idx=0, end_idx=None):
     with h5py.File(dataset_name, "r") as f:
@@ -115,7 +148,7 @@ def get_image_seq_from_annotation(annotation_path, start_idx=0, end_idx=None):
     dataset_name = info["original_file"]
     return get_image_seq_from_human_demo(dataset_name, start_idx=start_idx, end_idx=end_idx)
 
-def get_first_frame_annotation(annotations_folder, use_dust3r=False):
+def get_first_frame_annotation(annotations_folder, use_dust3r=False, use_align3r=False):
     """A helper function to get the first frame and its annotation from the specified annotations folder.
 
     Args:
@@ -124,8 +157,31 @@ def get_first_frame_annotation(annotations_folder, use_dust3r=False):
     Returns:
         image, annotated_mask
     """
+    assert not (use_dust3r and use_align3r), "Cannot use both dust3r and align3r"
 
-    if use_dust3r:
+    if use_align3r:
+        first_frame = np.array(
+            Image.open(
+                os.path.join(
+                    annotations_folder,
+                    "align3r",
+                    os.path.basename(annotations_folder),
+                    "frame_0000_rgb.png",
+                )
+            )
+        )
+        first_frame_annotation = np.array(
+            Image.open(os.path.join(annotations_folder, "frame_annotation.png"))
+        )
+        first_frame_annotation = zoom(
+            first_frame_annotation,
+            (
+                first_frame.shape[0] / first_frame_annotation.shape[0],
+                first_frame.shape[1] / first_frame_annotation.shape[1],
+            ),
+            order=0,
+        )
+    elif use_dust3r:
         info = get_annotation_info(annotations_folder)
         dataset_name = info["original_file"]
         print(dataset_name)
@@ -180,7 +236,7 @@ def get_palette(palette="davis"):
         return davis_palette
     elif palette == "youtube":
         return youtube_palette
-    
+
 def convert_convention(image, real_robot=True):
     if not real_robot:
         if macros.IMAGE_CONVENTION == "opencv":
@@ -572,7 +628,23 @@ def plotly_draw_image_correspondences(image1, points1, image2, points2, max_widt
     else:
         return fig
 
-def plotly_draw_3d_pcd(pcd_points=None, pcd_colors=None, addition_points=None, marker_size=3, equal_axis=True, title="", offline=False, no_background=False, default_rgb_str="(255,0,0)",additional_point_draw_lines=False, uniform_color=False):
+
+def plotly_draw_3d_pcd(
+    pcd_points=None,
+    pcd_colors=None,
+    addition_points=None,
+    marker_size=3,
+    equal_axis=True,
+    title="",
+    offline=False,
+    no_background=False,
+    default_rgb_str="(77, 167, 179)",
+    additional_point_draw_lines=False,
+    uniform_color=False,
+):
+    """
+    Format of additional points is (n, p, 3) where n is the number of groups of points, p is the number of points in each group, and 3 is the dimension of each point.
+    """
 
     x_vals, y_vals, z_vals = [], [], []
     color_str = 'rgb(255,0,0)'
@@ -598,7 +670,6 @@ def plotly_draw_3d_pcd(pcd_points=None, pcd_colors=None, addition_points=None, m
     )
     data = [rgbd_scatter]
     if addition_points is not None:
-        # print(addition_points.shape)
         assert(addition_points[0].shape[-1] == 3)
         # # check if addition_points are three dimensional
         if type(addition_points) == np.ndarray:
@@ -614,7 +685,7 @@ def plotly_draw_3d_pcd(pcd_points=None, pcd_colors=None, addition_points=None, m
                 mode = "markers"
             marker_dict = dict(size=marker_size,
                                 opacity=0.8)
-            
+
             if uniform_color:
                 marker_dict["color"] = f'rgb{default_rgb_str}'
             rgbd_scatter2 = go.Scatter3d(
@@ -632,12 +703,13 @@ def plotly_draw_3d_pcd(pcd_points=None, pcd_colors=None, addition_points=None, m
         )
     else:
         scene_dict = dict()
+
     # Set the layout for the plot
     layout = go.Layout(
-        margin=dict(l=0, r=0, b=0, t=0),
+        #margin=dict(l=0, r=0, b=0, t=0),
         # axes range
         scene=scene_dict,
-        title=dict(text=title, automargin=True)
+        #title=dict(text=title, automargin=True)
     )
 
     fig = go.Figure(data=data, layout=layout)
@@ -654,7 +726,6 @@ def plotly_draw_3d_pcd(pcd_points=None, pcd_colors=None, addition_points=None, m
         margin=dict(l=0, r=0, b=0, t=0),  # No margins
         showlegend=False,
     )
-
 
     if not offline:
         fig.show()
@@ -779,7 +850,7 @@ def edit_h5py_datasets(base_dataset_name, additional_dataset_name, mode="merge  
 
     base_dataset.close()
     additional_dataset.close()
- 
+
 
 def normalize_pcd(obs, max_array, min_array):
     """Normalize the point cloud data.
@@ -800,13 +871,14 @@ def normalize_pcd(obs, max_array, min_array):
 class VideoWriter():
     """A wrapper of imageio video writer
     """
-    def __init__(self, video_path, video_name=None, fps=30, single_video=True, save_video=True):
+    def __init__(self, video_path, video_name=None, fps=30, single_video=True, save_video=True, bgr=True):
         self.video_path = video_path
         self.save_video = save_video
         self.fps = fps
         self.image_buffer = {}
         self.single_video = single_video
         self.last_images = {}
+        self.bgr = bgr
         if video_name is None:
             self.video_name = "video.mp4"
         else:
@@ -816,7 +888,7 @@ class VideoWriter():
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.save(self.video_name)
+        self.save(self.video_name, bgr=self.bgr)
 
     def reset(self):
         if self.save_video:
@@ -835,7 +907,7 @@ class VideoWriter():
             for i in range(len(images)):
                 self.append_image(images[i], i)
 
-    def save(self, video_name=None, flip=True, bgr=True):
+    def save(self, video_name=None, flip=True, bgr=True, quality=10):
         if video_name is None:
             video_name = self.video_name
         img_convention = 1
@@ -848,7 +920,7 @@ class VideoWriter():
             os.makedirs(self.video_path, exist_ok=True)
             if self.single_video:
                 video_name = os.path.join(self.video_path, video_name)
-                video_writer = imageio.get_writer(video_name, fps=self.fps)
+                video_writer = imageio.get_writer(video_name, fps=self.fps, quality=quality, codec='libx264', macro_block_size=None)
                 for idx in self.image_buffer.keys():
                     for im in self.image_buffer[idx]:
                         video_writer.append_data(im[::img_convention, :, ::color_convention])
@@ -862,7 +934,6 @@ class VideoWriter():
                     video_writer.close()
             ORION_LOGGER.info(f"Saved videos to {video_name}.")
         return video_name
-
 
 
 class Timer:
@@ -897,7 +968,7 @@ class Timer:
 
     def get_elapsed_time(self):
         return self.value
-    
+
 
 # Functionalities for loading images / videos from robot demo data
 
@@ -971,7 +1042,6 @@ def load_image_from_human_hdf5_dataset(
 ):
     with h5py.File(dataset_name, "r") as dataset:
         image = dataset[f"data/human_demo/obs/{image_name}"][frame_idx]
-    
     if flip:
         image = image[::-1]
     if bgr:
@@ -1001,12 +1071,15 @@ def export_video_from_human_hdf5_dataset(
         image_name="agentview_rgb",
         flip=False,
         bgr=False,
-):
+        write_downsampled=True
+):  
     video_seq = load_video_from_human_hdf5_dataset(dataset_name, image_name, flip=flip, bgr=bgr)
     video_writer = VideoWriter(video_path=video_path, video_name=f"{video_name}.mp4", fps=30, save_video=True)
     for image in video_seq:
         video_writer.append_image(image)
-    video_path = video_writer.save()
+    video_path = video_writer.save(bgr=bgr)
+    if write_downsampled:
+        video_writer.save(bgr=bgr, video_name=f"{video_name}_downsampled.mp4", quality=1)
     return video_path
 
 def load_first_frame_from_human_hdf5_dataset(
@@ -1092,7 +1165,15 @@ def simple_filter_outliers(points):
 def moving_average_filter(x, w):
     return np.convolve(x, np.ones(w), 'valid') / w
 
-def create_point_clouds_from_keypoints(keypoints, depth_img, camera_intrinsics_matrix):
+
+def create_point_clouds_from_keypoints(
+    keypoints,
+    depth_img,
+    camera_intrinsics_matrix,
+    scaling_factor=1000,
+    colors=None,
+    reshape_contiguous=True,
+):
     """Manual computation of backprojection. This is used to compute every single point clouds based on a list of given keypoints.
 
     Args:
@@ -1103,7 +1184,7 @@ def create_point_clouds_from_keypoints(keypoints, depth_img, camera_intrinsics_m
     Returns:
         _type_: _description_
     """
-    z = depth_img.squeeze() / 1000
+    z = depth_img.squeeze() / scaling_factor #used to be / 1000
     max_x, max_y = depth_img.shape[1] - 1, depth_img.shape[0] - 1
 
     if len(depth_img.shape) == 3:
@@ -1112,8 +1193,21 @@ def create_point_clouds_from_keypoints(keypoints, depth_img, camera_intrinsics_m
         height, width = depth_img.shape[:2]
     x = keypoints[:, 0]
     y = keypoints[:, 1]
+
+    if np.max(y) > max_y or np.max(x) > max_x or np.min(y) < 0 or np.min(x) < 0:
+        print(f"WARNING: Max y: {np.max(y)}, Max x: {np.max(x)}, Min y: {np.min(y)}, Min x: {np.min(x)}")
+        print(f"Y-dim: {max_y}, X-dim: {max_x}")
+
+        y[y > max_y] = max_y
+        x[x > max_x] = max_x
+        y[y < 0] = 0
+        x[x < 0] = 0
+
     new_z = z[y.astype(np.int32), x.astype(np.int32)]
-    
+    if colors is not None:
+        new_colors = colors[y.astype(np.int32), x.astype(np.int32)]
+        new_colors.reshape(-1, 3)
+
     fx = camera_intrinsics_matrix[0, 0]
     fy = camera_intrinsics_matrix[1, 1]
     cx = camera_intrinsics_matrix[0, 2]
@@ -1126,6 +1220,8 @@ def create_point_clouds_from_keypoints(keypoints, depth_img, camera_intrinsics_m
     points = np.ascontiguousarray(np.stack([X, Y, Z], axis=-1))
     points = points.reshape(-1, 3)
 
+    if colors is not None:
+        return points, new_colors
     return points
 
 
@@ -1196,8 +1292,6 @@ def plotly_oog_seq(sequence, offline=False):
         return fig
 
 
-
-
 def read_from_runtime_file():
     def load_from_runtime_config():
         with open("experiments/run_time.json") as f:
@@ -1231,7 +1325,6 @@ def read_from_runtime_file():
     return runtime_folder, rollout_folder, human_video_annotation_path
 
 
-
 def finish_experiments(runtime_folder, rollout_folder, human_video_annotation_folder):
     with open(f"{runtime_folder}/finish.txt", "w") as f:
         f.write("finish")
@@ -1258,18 +1351,196 @@ def create_video(frames, output_path, fps=30, greyscale=False):
 
     out.release()
 
-def create_video(frames, output_path, fps=30, greyscale=False):
-    height, width = frames[0].shape[0:2]
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')  # You can also use 'XVID', 'MJPG', etc.
-    out = cv2.VideoWriter(output_path, fourcc, fps, (width, height))
+def save_to_hdf5(file_path, datasets, dataset_names, path_prefix='data/human_demo/obs/'):
+    with h5py.File(file_path, "r+") as f:
+        for dataset, dataset_name in zip(datasets, dataset_names):
+            if path_prefix + dataset_name in f:
+                del f[path_prefix + dataset_name]
+            f.create_dataset(path_prefix + dataset_name, data=dataset)
+
+def load_data_config_attrs(annotation_folder):
+    with open(os.path.join(annotation_folder, "config.json"), "r") as f:
+        config_dict = json.load(f)
+    dataset_path = config_dict["original_file"]
+    data_config = {}
+    with h5py.File(dataset_path, "r+") as f:
+        intrinsics = f["data/human_demo/obs/unidepth_intrinsics"][()][0]
+        #print(intrinsics.dtype, intrinsics[0,0].item(), intrinsics[0,0], intrinsics[0,0].item().dtype)
+        intrinsics_dict = {
+            "fx": intrinsics[0, 0].item(),
+            "fy": intrinsics[1, 1].item(),
+            "cx": intrinsics[0, 2].item(),
+            "cy": intrinsics[1, 2].item(),
+        }
+        data_config["intrinsics"] = {"camera_rs_0": intrinsics_dict}
+        data_config["extrinsics"] = {"camera_rs_0": {"translation": [0, 0, 0], "rotation": np.eye(3).tolist()}}
+        f["data"].attrs["data_config"] = json.dumps(data_config)
+
+def align_mesh_to_canonical_axes(mesh):
+    # Compute the centroid of the mesh
+    centroid = mesh.centroid
+
+    # Translate mesh to the origin
+    mesh.apply_translation(-centroid)
+
+    # Compute the covariance matrix of the vertices
+    covariance_matrix = np.cov(mesh.vertices.T)
+
+    # Perform eigen decomposition
+    eigenvalues, eigenvectors = np.linalg.eigh(covariance_matrix)
+
+    # Sort eigenvectors by eigenvalues in descending order
+    idx = eigenvalues.argsort()[::-1]
+    eigenvectors = eigenvectors[:, idx]
+
+    # Check the determinant of the rotation matrix to ensure it is a proper rotation
+    if np.linalg.det(eigenvectors) < 0:
+        eigenvectors[:, -1] = -eigenvectors[:, -1]
+
+    # Create the rotation matrix to align the principal axes to the canonical axes
+    rotation_matrix = eigenvectors
+
+    # Make homogenous
+    rotation_matrix = np.hstack((rotation_matrix, np.zeros((3, 1))))
+    rotation_matrix = np.vstack((rotation_matrix, np.array([0, 0, 0, 1])))
+
+    # Apply the rotation matrix
+    mesh.apply_transform(rotation_matrix.T)
+
+    return mesh
+
+
+def to_homo(pts):
+  '''
+  @pts: (N,3 or 2) will homogeneliaze the last dimension
+  '''
+  assert len(pts.shape)==2, f'pts.shape: {pts.shape}'
+  homo = np.concatenate((pts, np.ones((pts.shape[0],1))),axis=-1)
+  return homo
+
+def video_to_np(vidcap: cv2.VideoCapture):
+    #convert video into numpy array of frames
+    success,image = vidcap.read()
+    count = 0
+    frames = []
+    while success:
+        #image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
+        #frames.append(image[:,:,::-1])
+        frames.append(image[:,:,:])
+        success,image = vidcap.read()
+        count += 1
+    frames = np.array(frames)
+    return frames
+
+def get_all_annotation_folder_info(annotation_folder, force_mmde=False):
+    with open(os.path.join(annotation_folder, "config.json"), "r") as f:
+        config_dict = json.load(f)
+    demo_file = h5py.File(config_dict["original_file"], "r")
+    depths = None
     
-    if not greyscale:
-        frames = frames[:,:,:,::-1]
+    has_depth = "data/human_demo/obs/agentview_depth/" in demo_file
+    if force_mmde:
+        depths = np.load(os.path.join(annotation_folder, "FoundationPose", "depth", "all_pred_depth.npy"))
+    elif has_depth:
+        depths = demo_file["data/human_demo/obs/agentview_depth/"][()]
 
+    images = demo_file["data/human_demo/obs/agentview_rgb/"][()]
+    data_config = json.loads(demo_file["data"].attrs['data_config'])
 
-    for frame in frames:
-        if greyscale:
-            frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2RGB)
-        out.write(frame)
+    K = np.zeros((3, 3))
+    K[0,0] = data_config["intrinsics"]["camera_rs_0"]["fx"]
+    K[1,1] = data_config["intrinsics"]["camera_rs_0"]["fy"]
+    K[0,2] = data_config["intrinsics"]["camera_rs_0"]["cx"]
+    K[1,2] = data_config["intrinsics"]["camera_rs_0"]["cy"]
+    K[2,2] = 1
 
-    out.release()
+    masks = np.load(os.path.join(annotation_folder, 'masks.npz'))
+    masks = masks['arr_0']
+    demo_file.close()
+    
+    tracked_points = None
+    if os.path.exists(os.path.join(annotation_folder, "tracked_points.pt")):
+        tracked_points = torch.load(os.path.join(annotation_folder, "tracked_points.pt"), weights_only=True)
+        for key, val in tracked_points.items():
+            tracked_points[key] = val.cpu().numpy()
+    
+    return images, depths, masks, K, tracked_points
+
+def quat_wxyz_to_xyzw(quats):
+    return quats[:, [1, 2, 3, 0]]
+
+def invert_transformation_mat(mats):
+    # Assumes mats is either a 4x4 or a Nx4x4 matrix
+    
+    if mats.shape == (4, 4):
+        mats_inv = np.zeros_like(mats)
+        mats_inv[:3, :3] = mats[:3, :3].transpose()
+        mats_inv[:3, 3] = -mats[:3, :3].transpose() @ mats[:3, 3]
+        mats_inv[3, 3] = 1
+    else:    
+        mats_inv = np.zeros_like(mats)
+        mats_inv[:, :3, :3] = mats[:, :3, :3].transpose(0, 2, 1)
+        mats_inv[:, :3, 3] = -mats[:, :3, :3].transpose(0, 2, 1) @ mats[:, :3, 3][:, :, None]
+        mats_inv[:, 3, 3] = 1
+    return mats_inv
+
+def outlier_detection(points, threshold=2.5):
+    z_scores = np.abs(zscore(points, axis=0))  # Compute Z-scores
+    outlier_mask = (z_scores >= threshold).any(axis=1)  # Create a boolean mask
+    return outlier_mask
+
+def visualize_plane_detection(plane_estimation_result):
+    """
+    Returns a plotly go object that you can pass into fig.add_trace
+    """
+    
+    x_vals = np.linspace(-1, 1, 10)  # Adjust the range as needed to cover red points
+    y_vals = np.linspace(-1, 1, 10)  # Adjust the range as needed to cover red points
+    x_grid, y_grid = np.meshgrid(x_vals, y_vals)
+
+    # Compute corresponding z values using the plane equation: ax + by + cz + d = 0
+    a, b, c, d = plane_estimation_result["plane_model"]
+    z_grid = (-a * x_grid - b * y_grid - d) / c
+
+    # Add the plane as a surface
+    plane_surface = go.Surface(
+        x=x_grid,
+        y=y_grid,
+        z=z_grid,
+        colorscale="Blues",
+        opacity=0.6,  # Set the opacity so that both the plane and points are visible
+        name="Plane",
+    )
+    
+    return plane_surface
+
+def trajectory_length(flat_trajectory):
+    """Compute the total length of the trajectory."""
+    T = len(flat_trajectory) // 3
+    trajectory = flat_trajectory.reshape((T, 3))
+    length = 0
+    for t in range(T - 1):
+        length += np.linalg.norm(trajectory[t + 1] - trajectory[t])
+    return length
+
+def project_2d(X, Y, Z, fx, fy, cx, cy):
+    u = fx * X / Z + cx
+    v = fy * Y / Z + cy
+    return np.array([u, v])
+
+def objective_3d_to_2d_err(flat_trajectory, keypoints, K, lamb):
+    assert 0 <= lamb <= 1
+    
+    fx, fy, cx, cy = K[0, 0], K[1, 1], K[0, 2], K[1, 2]
+    T = len(keypoints)
+    assert len(flat_trajectory) == 3 * T
+    
+    trajectory = flat_trajectory.reshape(T, 3)
+    projection_error = 0
+    for t in range(T):
+        X, Y, Z = trajectory[t]
+        u, v = project_2d(X, Y, Z, fx, fy, cx, cy)
+        projection_error += np.sum((keypoints[t] - np.array([u, v]))**2)
+    
+    #return projection_error   
+    return (1 - lamb) * projection_error + lamb * trajectory_length(flat_trajectory)
