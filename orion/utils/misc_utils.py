@@ -19,7 +19,6 @@ import torch
 import inspect
 
 from PIL import Image
-from third_party.XMem.util.palette import davis_palette
 from orion.utils.log_utils import get_orion_logger
 
 import skvideo.io
@@ -198,7 +197,7 @@ def get_first_frame_annotation(annotations_folder, use_dust3r=False, use_align3r
         first_frame = cv2.resize(first_frame, (first_frame_annotation.shape[1], first_frame_annotation.shape[0]), interpolation=cv2.INTER_AREA)
     return first_frame, first_frame_annotation
 
-def get_overlay_video_from_dataset(dataset_name, demo_idx=None, palette=davis_palette, video_name="overlay_video.mp4", flip=True):
+def get_overlay_video_from_dataset(dataset_name, demo_idx=None, palette=None, video_name="overlay_video.mp4", flip=True):
     annotations_folder = get_annotation_path(dataset_name)
     video_path = annotations_folder
 
@@ -210,7 +209,7 @@ def get_overlay_video_from_dataset(dataset_name, demo_idx=None, palette=davis_pa
             masks = mask_dataset[f"data/{demo}/obs/agentview_masks"][()]
             for (image, mask) in zip(images, masks):
                 colored_mask = Image.fromarray(mask)
-                colored_mask.putpalette(palette)
+                colored_mask.putpalette(get_palette())
                 colored_mask = np.array(colored_mask.convert("RGB"))
                 # resize image to colored_mask
                 image = cv2.resize(image, (colored_mask.shape[1], colored_mask.shape[0]), interpolation=cv2.INTER_AREA)
@@ -932,7 +931,7 @@ class VideoWriter():
                     for im in self.image_buffer[idx]:
                         video_writer.append_data(im[::img_convention, :, ::color_convention])
                     video_writer.close()
-            ORION_LOGGER.info(f"Saved videos to {video_name}.")
+            ORION_LOGGER.info(f"Saved videos to {video_name} .")
         return video_name
 
 
