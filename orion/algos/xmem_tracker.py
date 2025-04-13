@@ -9,15 +9,13 @@ import torch.nn.functional as F
 from pathlib import Path
 from torchvision import transforms
 
-from orion import ROOT_PATH
+from orion import ROOT_PATH as ORION_ROOT
+from orion_rgb import ROOT_FOLDER
 
 from third_party.XMem.model.network import XMem
 from third_party.XMem.inference.inference_core import InferenceCore
 from third_party.XMem.inference.data.mask_mapper import MaskMapper
 from third_party.XMem.util.palette import davis_palette
-
-
-FOLDER_PATH = os.path.dirname(__file__)
 
 im_mean = (124, 116, 104)
 
@@ -40,7 +38,7 @@ class XMemTracker:
         xmem_checkpoint: checkpoint of XMem model
         """
         # load configurations
-        with open(os.path.join(ROOT_PATH, "vision_model_configs/xmem_config.yaml"), 'r') as stream: 
+        with open(os.path.join(ORION_ROOT, "vision_model_configs/xmem_config.yaml"), 'r') as stream: 
             config = yaml.safe_load(stream) 
         # initialise XMem
         network = XMem(config, xmem_checkpoint).to(device).eval()

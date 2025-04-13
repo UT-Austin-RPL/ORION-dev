@@ -14,4 +14,4 @@ images_for_meshes/*
 _DATA
 *.log
 *.pth
-*.egg-info
+orion.egg-info
