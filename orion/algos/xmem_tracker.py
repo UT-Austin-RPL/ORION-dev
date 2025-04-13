@@ -10,7 +10,6 @@ from pathlib import Path
 from torchvision import transforms
 
 from orion import ROOT_PATH as ORION_ROOT
-from orion_rgb import ROOT_FOLDER
 
 from third_party.XMem.model.network import XMem
 from third_party.XMem.inference.inference_core import InferenceCore
