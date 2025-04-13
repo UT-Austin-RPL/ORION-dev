@@ -416,6 +416,8 @@ class OpenWorldObjectSceneGraph():
                                         "distance_threshold": 0.01
                                  },
                                  baseline_optical_flow=False,
+                                 use_unidepth=False,
+                                 scaling_factor=1
                                  ):
         """Generate OOG from human video input. If (segment_start_idx, segment_end_idx) == (0, None), it means that no segmentation is applied and the whole video is considered. 
 
@@ -484,7 +486,8 @@ class OpenWorldObjectSceneGraph():
         config_info = get_annotation_info(human_video_annotation_path)
         human_demo_dataset_name = config_info["original_file"]
         image_seg_seq = get_image_seq_from_human_demo(human_demo_dataset_name, start_idx=segment_start_idx, end_idx=segment_end_idx)
-        depth_seg_seq = get_depth_seq_from_human_demo(human_demo_dataset_name, start_idx=segment_start_idx, end_idx=segment_end_idx)
+        depth_seg_seq = get_depth_seq_from_human_demo(human_demo_dataset_name, start_idx=segment_start_idx, end_idx=segment_end_idx, use_unidepth=use_unidepth)
+        depth_seg_seq *= scaling_factor
         # initialize the images and the initial points on pixels.
         self.generate_from_image_and_points(
             input_image=image_seg_seq[0],
@@ -495,9 +498,10 @@ class OpenWorldObjectSceneGraph():
         # Get the image and depth sequence given (segment_start_idx, segment_end_idx)
 
         # 2.2 load camera extrinsics, and intrinsics, and the depth image corresonding to 
-        recon_info = load_reconstruction_info_from_human_demo(human_demo_dataset_name)
+        recon_info = load_reconstruction_info_from_human_demo(human_demo_dataset_name, use_unidepth=use_unidepth)
         self.set_camera_extrinsics(np.eye(4))
         self.set_camera_intrinsics(recon_info["intrinsics"])
+        print("depth_seg_seq[0]:", depth_seg_seq[0])
         self.load_depth(depth_seg_seq[0])
 
         if self.is_first_frame:
@@ -734,10 +738,12 @@ class OpenWorldObjectSceneGraph():
                             tracked_pixel_trajs, 
                             depth_seq, 
                             camera_intrinsics_matrix, 
-                            camera_extrinsics_matrix):
+                            camera_extrinsics_matrix,
+                            scaling_factor=1):
         points_list = []
+        print("comute_world_trajs")
         for t in range(tracked_pixel_trajs.shape[1]):
-            points = create_point_clouds_from_keypoints(tracked_pixel_trajs[:, t], depth_seq[t], camera_intrinsics_matrix)
+            points = create_point_clouds_from_keypoints(tracked_pixel_trajs[:, t], depth_seq[t], camera_intrinsics_matrix, scaling_factor=scaling_factor)
             points_list.append(points)
         points_list = np.stack(points_list, axis=0)
         world_trajs = []
@@ -959,10 +965,10 @@ class OpenWorldObjectSceneGraph():
     def set_camera_intrinsics(self, camera_intrinsics):
         self.camera_intrinsics = camera_intrinsics
     
-    def load_depth(self, input_depth):
+    def load_depth(self, input_depth, scaling_factor=1):
         self.input_depth = np.squeeze(np.ascontiguousarray(input_depth))
         # update the points
-        self.create_world_points()
+        self.create_world_points(scaling_factor=scaling_factor)
 
     def draw_rgb_depth(self, width=800, height=300):
         assert(self.input_depth is not None), "Depth not loaded"
@@ -1002,6 +1008,8 @@ class OpenWorldObjectSceneGraph():
             downsample=downsample,
             depth_trunc=depth_trunc,
         )
+
+        print("pcd_points: ", pcd_points)
 
         marker_size = 3
 
@@ -1147,13 +1155,15 @@ class OpenWorldObjectSceneGraph():
         for i, point_node in enumerate(self.point_nodes):
             point_node.tracked_pixel_traj = pixel_trajs[i]
 
-    def create_world_points(self):
+    def create_world_points(self, scaling_factor=1):
         assert(self.camera_extrinsics is not None), "Camera extrinsics not set"
         assert(self.camera_intrinsics is not None), "Camera intrinsics not set"
+        print("create_world_pts")
         points = create_point_clouds_from_keypoints(
             np.array(self.get_point_list(mode="pixel")),
             self.input_depth[..., np.newaxis],
             self.camera_intrinsics,
+            scaling_factor=scaling_factor
         )
         for i in range(len(self.point_nodes)):
             self.point_nodes[i].world_point = transform_points(self.camera_extrinsics, points[i:i+1])

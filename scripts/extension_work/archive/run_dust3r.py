@@ -18,9 +18,17 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--annotation-folder", type=str, default="/home/arisrei/research/RPL/ORION/annotations/human_demo/yellow_bottle")
     parser.add_argument("--dust3r-path", type=str, default="/home/arisrei/research/RPL/ORION/third_party/dust3r")
-    parser.add_argument("--cuda-device", type=int, default=4)
+    parser.add_argument("--cuda-device", type=int, default=7)
     parser.add_argument("--start-end", type=int, nargs=2)
+    parser.add_argument("--specific_frames", type=int, nargs='+')
+    parser.add_argument("--sample-every-percent", type=float, default=1)
+    parser.add_argument("--batch-size", type=int, default=25)
+
     args = parser.parse_args()
+
+
+    if args.start_end and args.specific_frames:
+        raise ValueError("Cannot specify both start-end and specific_frames")
 
     annotation_dir = args.annotation_folder
     dust3r_path = args.dust3r_path
@@ -38,18 +46,29 @@ def main():
     print(images_folder)
     num_files = len(os.listdir(images_folder))
     file_list = []
+    idx_list = []
+    increment = int(num_files * args.sample_every_percent)
+
+
     if args.start_end:
         start = args.start_end[0]
         end = args.start_end[1]
 
         print(start,end)
-        for i in range(start, end):
+        for i in range(start, end, increment):
             file_list.append(os.path.join(images_folder, f"image{i}.png"))
+            idx_list.append(i)
+    elif args.specific_frames:
+        for i in args.specific_frames:
+            file_list.append(os.path.join(images_folder, f"image{i}.png"))
+            idx_list.append(i)
     else:
-        for i in range(num_files):
+        for i in range(0, num_files, increment):
             file_list.append(os.path.join(images_folder, f"image{i}.png"))
+            idx_list.append(i)
 
-    image_batch_size = 25
+    idx_list = np.array(idx_list)
+    image_batch_size = args.batch_size
     overlap_percent = .2
     
     start_idx = 0
@@ -107,6 +126,8 @@ def main():
         pts3d_curr = scene.get_pts3d()
         intrinsics_curr = scene.get_intrinsics().cpu().detach().numpy()
         extrinsics_curr = scene.get_im_poses().cpu().detach().numpy()
+        print("extrinsics_curr: ")
+        print(extrinsics_curr)
 
         mask = to_numpy(scene.get_masks())
         pts3d_curr = to_numpy(pts3d_curr)
@@ -205,6 +226,8 @@ def main():
     if "scene_col" in demo_file["data/human_demo/obs/"]:
         del demo_file["data/human_demo/obs/scene_col"]
         
+    if "dust3r_idx_list" in demo_file["data/human_demo/obs/"]:
+        del demo_file["data/human_demo/obs/dust3r_idx_list"]
     if "dust3r_extrinsic_batches" in demo_file["data/human_demo/obs/"]:
         del demo_file["data/human_demo/obs/dust3r_extrinsic_batches"]
     if "dust3r_intrinsic_batches" in demo_file["data/human_demo/obs/"]:
@@ -216,6 +239,7 @@ def main():
     if 'data/human_demo/obs/dust3r_depths_unormalized_per_batch' in demo_file:
         del demo_file['data/human_demo/obs/dust3r_depths_unormalized_per_batch']
 
+    demo_file.create_dataset("data/human_demo/obs/dust3r_idx_list", data=idx_list)
     demo_file.create_dataset("data/human_demo/obs/dust3r_depth", data=depths_unormalized)
     demo_file.create_dataset("data/human_demo/obs/dust3r_rgb", data=imgs)
     demo_file.create_dataset("data/human_demo/obs/dust3r_intrinsics", data=intrinsics)

@@ -10,6 +10,8 @@ def main():
     parser.add_argument('--tap-pen', type=float, default=10, help='Penalty for changepoint detection.')
     parser.add_argument("--use-dust3r", action="store_true")
     parser.add_argument("--create-dust3r-resized", action="store_true")
+    parser.add_argument("--bgr", default=True, action='store_true', help="Use BGR color space")
+    parser.add_argument('--no-bgr', dest='bgr', action='store_false')
     args = parser.parse_args()
 
     if args.create_dust3r_resized:
@@ -29,7 +31,8 @@ def main():
         "python",
         "scripts/02a_xmem_annotation.py",
         "--annotation-folder",
-        args.annotation_folder
+        args.annotation_folder,
+        '--bgr' if args.bgr else '--no-bgr'
     ]
     command = " ".join(commands)
     os.system(command)

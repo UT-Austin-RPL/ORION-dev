@@ -8,3 +8,10 @@ testing_results/*
 visualization/*
 junk/*
 /home/arisrei/research/RPL/ORION/third_party/Gen6D/data/*
+meshes/*
+images_for_meshes/*
+.vscode
+_DATA
+*.log
+*.pth
+*.egg-info

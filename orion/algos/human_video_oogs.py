@@ -19,6 +19,8 @@ from orion.utils.traj_utils import SimpleTrajProcessor
 from orion.utils.o3d_utils import *
 from orion.utils.log_utils import get_orion_logger
 
+from tqdm import tqdm
+
 ORION_LOGGER = get_orion_logger("orion")
 
 def identify_outliers_with_silhouette(original_traj, n_clusters=2):
@@ -110,7 +112,8 @@ class HumanVideoOOGs():
                                         "num_iterations": 1000,
                                         "distance_threshold": 0.01
                                  },
-                                 baseline_optical_flow=False
+                                 baseline_optical_flow=False,
+                                 use_unidepth=False
                                  ):
         self.mode = mode
         self.human_video_annotation_path = human_video_annotation_path
@@ -140,6 +143,7 @@ class HumanVideoOOGs():
                 filter_annotation=filter_annotation,
                 plane_estimation_depth_trunc=plane_estimation_depth_trunc,
                 plane_estimation_kwargs=plane_estimation_kwargs,
+                use_unidepth=use_unidepth
             )
             self.human_object_graphs.append(human_object_graph)
 
@@ -151,7 +155,8 @@ class HumanVideoOOGs():
             segment_end_idx=segment.end_idx,
             previous_graph=None if len(self.human_object_graphs) == 0 else self.human_object_graphs[-1],
             filter_annotation=filter_annotation,
-            baseline_optical_flow=baseline_optical_flow
+            baseline_optical_flow=baseline_optical_flow,
+            use_unidepth=use_unidepth
         )
         self.human_object_graphs.append(human_object_graph)
         ORION_LOGGER.info(f"Generated # of human_object_graphs: {len(self.human_object_graphs)}")
@@ -326,7 +331,7 @@ class HumanVideoOOGs():
                     best_target_transform = target_transform
 
 
-            for i in range(num_max_iter):
+            for i in tqdm(range(num_max_iter)):
                 subgoal_transform = global_registration(reference_pcd, new_reference_pcd, voxel_size=global_registration_config["voxel_size"] * np.random.uniform())
                 estimated_reference_pcd = transform_point_clouds(subgoal_transform, reference_pcd)
                 if len(estimated_reference_pcd) > len(new_reference_pcd):
@@ -335,8 +340,9 @@ class HumanVideoOOGs():
                     sampled_new_reference_pcd = random_subsampling(new_reference_pcd, len(reference_pcd))
                 subgoal_hausdorff_dist = hausdorff_distance(estimated_reference_pcd, sampled_new_reference_pcd)
                 
+                #print(f"best_subgoal_hausdoff, {best_subgoal_hausdoff}, subgoal_hausdorff_dist: {subgoal_hausdorff_dist}, deviate_from_z_axis: {deviate_from_z_axis(subgoal_transform)}, deviation_angle_threshold: {deviation_angle_threshold}")
                 if subgoal_hausdorff_dist < best_subgoal_hausdoff and deviate_from_z_axis(subgoal_transform) < deviation_angle_threshold:
-                    ORION_LOGGER.debug(f"target_hausdorff_dist: {subgoal_hausdorff_dist}")
+                    ORION_LOGGER.debug(f"subgoal_hausdorff_dist: {subgoal_hausdorff_dist}")
                     best_subgoal_hausdoff = subgoal_hausdorff_dist
                     best_subgoal_transform = subgoal_transform
 
@@ -347,10 +353,13 @@ class HumanVideoOOGs():
                 else:
                     sampled_new_target_pcd = random_subsampling(new_target_pcd, len(target_pcd))
                 target_hausdorff_dist = hausdorff_distance(estimated_target_pcd, sampled_new_target_pcd)
+                print(f"best_target_hausdoff, {best_target_hausdoff}, target_hausdorff_dist: {target_hausdorff_dist}, deviate_from_z_axis: {deviate_from_z_axis(target_transform)}, deviation_angle_threshold: {deviation_angle_threshold}")
                 if target_hausdorff_dist < best_target_hausdoff and deviate_from_z_axis(target_transform) < deviation_angle_threshold:
                     ORION_LOGGER.debug(f"target_hausdorff_dist: {target_hausdorff_dist}")
                     best_target_hausdoff = target_hausdorff_dist
                     best_target_transform = target_transform
+                print(best_subgoal_transform, best_target_transform)
+
             count += 1
 
         subgoal_transform = best_subgoal_transform
@@ -387,7 +396,7 @@ class HumanVideoOOGs():
         # TODO: Handle the case of trajectory already being filtered --- they shouldn't go into estimation of transformation as well.
         robot_object_graph.set_world_trajs_by_object(new_trajs, object_id=manipulate_object_id, outlier_indices=outlier_indices)
 
-        new_subgoal_visibility_trajs = np.ones_like(matched_human_object_graph.get_visibility_trajs()).astype(np.bool)
+        new_subgoal_visibility_trajs = np.ones_like(matched_human_object_graph.get_visibility_trajs()).astype(bool)
         robot_object_graph.set_visibility_trajs(new_subgoal_visibility_trajs)
         
         if high_occlusion:
@@ -396,8 +405,7 @@ class HumanVideoOOGs():
             filter_visibility_trajs = np.repeat(filter_visibility[:, None], traj_len, axis=1)
             # print(filter_visibility_trajs.shape)
             robot_object_graph.set_visibility_trajs_by_object(object_id=manipulate_object_id, visibility_traj=filter_visibility_trajs)
-
-            
+        print("count: ", count)
         return subgoal_transform, target_transform
 
 
@@ -474,10 +482,12 @@ class HumanVideoOOGs():
                     v_mean_list.append(v_mean)
                     v_std_list.append(v_std)
                     candidate_objects_to_move.append(object_id)
+            print("candidate_objects_to_move: ", candidate_objects_to_move)
             if len(candidate_objects_to_move) == 0:
                 graph_in_query.set_oog_mode(OOGMode.FREE_MOTION)
             else:
                 if (len(candidate_objects_to_move) == 1) or (np.std(v_mean_list) < 0.1):
+                    print("setting manipulate object id: ", candidate_objects_to_move[0])
                     graph_in_query.set_manipulate_object_id(candidate_objects_to_move[0])
                 else:
                     # sort candidate objects to move by v_mean

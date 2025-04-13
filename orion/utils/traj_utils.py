@@ -39,9 +39,9 @@ class SimpleTrajProcessor(TrajProcessorBase):
         K = np.array([[0, -axis[2], axis[1]],
                         [axis[2], 0, -axis[0]],
                         [-axis[1], axis[0], 0]])
-        R = I + K * np.sin(theta) + np.matmul(K, K) * (1 - np.cos(theta))
-        # print("R: ", R)
-        # print("scaling: ", scaling)
+        
+        R = I + K * np.sin(theta) + np.matmul(K, K) * (1 - np.cos(theta)) 
+        
         for i in range(new_traj.shape[0]):
             new_traj[i] = np.matmul(R, new_traj[i]) * scaling + new_init_point
         return new_traj

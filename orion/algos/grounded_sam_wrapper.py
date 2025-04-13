@@ -47,7 +47,7 @@ import groundingdino.datasets.transforms as T
 from orion.utils.misc_utils import get_palette
 
 class GroundedSamWrapper:
-    def load_model_hf(self, repo_id, filename, ckpt_config_filename, device='cuda:4'):
+    def load_model_hf(self, repo_id, filename, ckpt_config_filename, device='cuda'):
         cache_config_file = hf_hub_download(repo_id=repo_id, filename=ckpt_config_filename)
 
         args = SLConfig.fromfile(cache_config_file) 
@@ -60,7 +60,7 @@ class GroundedSamWrapper:
         print("Model loaded from {} \n => {}".format(cache_file, log))
         _ = model.eval()
         return model   
-    def __init__(self):
+    def __init__(self, sam_checkpoint_loc='./third_party/sam_checkpoints/sam_vit_h_4b8939.pth'):
         # Use this command for evaluate the Grounding DINO model
         # Or you can download the model by yourself
         ckpt_repo_id = "ShilongLiu/GroundingDINO"
@@ -69,8 +69,8 @@ class GroundedSamWrapper:
 
         self.groundingdino_model = self.load_model_hf(ckpt_repo_id, ckpt_filenmae, ckpt_config_filename)
 
-        self.device = 'cuda:4'
-        sam_checkpoint = './third_party/sam_checkpoints/sam_vit_h_4b8939.pth'
+        self.device = 'cuda'
+        sam_checkpoint = sam_checkpoint_loc
         sam = build_sam(checkpoint=sam_checkpoint)
         sam.to(device=self.device)
         self.sam_predictor = SamPredictor(sam)
@@ -94,7 +94,7 @@ class GroundedSamWrapper:
                 T.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
             ]
         )
-        image_source = Image.fromarray(image).convert("RGB")
+        image_source = Image.fromarray(image)#.convert("RGB")
         image_transformed, _ = transform(image_source, None)
         return image, image_transformed
 
@@ -111,11 +111,14 @@ class GroundedSamWrapper:
 
         return final_mask
 
-    def segment(self, image_np, prompts, box_threshold=0.3, text_threshold=0.25, filter_threshold=200):
+    def segment(self, image_np, prompts, box_threshold=0.35, text_threshold=0.25, filter_threshold=200, concat_masks=False):
         image_source, image = self.transform(image_np)
         prompt_text = ""
         for prompt in prompts:
-            prompt_text += (prompt + ".")
+            prompt_text += (prompt + ". ")
+        
+        prompt_text = prompt_text[:-1]
+        print("Prompt text: ", prompt_text)
 
         boxes, logits, phrases = predict(
             model=self.groundingdino_model, 
@@ -123,10 +126,13 @@ class GroundedSamWrapper:
             caption=prompt_text, 
             box_threshold=box_threshold, 
             text_threshold=text_threshold,
-            device='cpu'
+            device='cpu',
         )
 
+        print(f"{logits=}, {phrases=}")
+
         if boxes.shape[0] == 0:
+            print('Returning early because no boxes found')
             return np.array([])
 
            
@@ -134,10 +140,10 @@ class GroundedSamWrapper:
         annotated_frame = annotated_frame[...,::-1] # BGR to RGB
 
         img_src = Image.fromarray(image_source)
-        # img_src.save("img_src.png")
+        img_src.save("img_src.png")
 
         img_annotated = Image.fromarray(annotated_frame)
-        # img_annotated.save("annotated.png")
+        img_annotated.save("annotated.png")
 
         # set image
         self.sam_predictor.set_image(image_source)
@@ -167,6 +173,11 @@ class GroundedSamWrapper:
             if i not in filter_indices:
                 final_mask[intermediate_final_mask == i] = count + 1
                 count += 1
+        
+        if concat_masks:
+            final_mask[final_mask != 0] = 1
+        
+        print("Final mask values: ", np.unique(final_mask))
 
         mask_image_pil = Image.fromarray(final_mask) # .convert("RGBA")
         mask_image_pil.putpalette(get_palette())

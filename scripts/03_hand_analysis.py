@@ -150,9 +150,10 @@ def main():
                 bboxes.append(bbox)
                 is_right.append(1)
 
-        vitpose_detections.append(right_hand_keyp)
-        if len(bboxes) == 0:
+        if len(bboxes) == 0 or right_hand_keyp is None:
             continue
+        vitpose_detections.append(right_hand_keyp)
+
 
         boxes = np.stack(bboxes)
         right = np.stack(is_right)

@@ -4,6 +4,7 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import os
 import torch
 import argparse
 import imageio.v3 as iio
@@ -54,9 +55,12 @@ def main():
         "--use-dust3r",
         action="store_true",
     )
+    parser.add_argument(
+        "--points-name",
+    )
+    parser.add_argument("--use-align3r", action="store_true")
 
     args = parser.parse_args()
-
     if args.checkpoint is not None:
         model = CoTrackerOnlinePredictor(checkpoint=args.checkpoint)
     else:
@@ -65,12 +69,11 @@ def main():
 
     window_frames = []
 
-    load_points = torch.load(f"{args.annotation_path}/points.pt")
+    load_points = torch.load(args.points_name)
 
     queries_y = torch.from_numpy(load_points[:, 1]).float().to(DEFAULT_DEVICE).unsqueeze(0).unsqueeze(-1)
     queries_x = torch.from_numpy(load_points[:, 0]).float().to(DEFAULT_DEVICE).unsqueeze(0).unsqueeze(-1)
     queries = torch.cat([torch.zeros_like(queries_x), queries_x, queries_y], dim=-1)
-
 
     def _process_step(window_frames, is_first_step, grid_size, grid_query_frame, queries=None):
         video_chunk = (
@@ -87,7 +90,7 @@ def main():
         )
 
     # Iterating over video frames, processing one window at a time:
-    
+
     annotation_info = get_annotation_info(args.annotation_path)
     assert(annotation_info["mode"] in ["video", "demo", "human_demo"]), "target file must be a video"
     if args.use_dust3r:
@@ -96,8 +99,17 @@ def main():
         video_path = annotation_info["video_file"]
     print(annotation_info)
 
-
-    video_frames = read_video_from_path(video_path)
+    if args.use_align3r:
+        video_frames = np.load(
+            os.path.join(
+                args.annotation_path,
+                "align3r",
+                os.path.basename(args.annotation_path),
+                "all_rgbs.npy",
+            )
+        )
+    else:
+        video_frames = read_video_from_path(video_path)
     print(type(video_frames))
     print(video_frames.shape)
 
@@ -127,14 +139,17 @@ def main():
     )
 
     print("Tracks are computed")
-    tracked_point_file = f"{args.annotation_path}/tracked_points.pt"
+    tracked_point_folder = f"{args.annotation_path}"
+    if args.use_align3r:
+        tracked_point_folder = os.path.join(args.annotation_path, "align3r")
+    tracked_point_file = os.path.join(tracked_point_folder, "tracked_points.pt")
     pred_results = {
         "pred_tracks": pred_tracks,
         "pred_visibility": pred_visibility,
     }
     torch.save(pred_results, tracked_point_file)
 
-    print("Data is ready. ")
+    print(f"Data is ready. Saved tracked points to {tracked_point_file}")
 
     if args.save_video:
         print("Rendering video ...")
